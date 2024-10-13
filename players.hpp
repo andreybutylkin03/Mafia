@@ -8,6 +8,7 @@
 #include <queue>
 #include <set>
 #include <syncstream>
+#include <map>
 
 #include "shared_ptr.hpp"
 
@@ -18,6 +19,14 @@ enum Roles
     COMA,
     MANA,
     MAFIA,
+};
+
+std::map<int, std::string> num_to_role = {
+    {0, "CIVILLIAN"}, 
+    {1, "DOC"},
+    {2, "COMA"},
+    {3, "MANA"},
+    {4, "MAFIA"}
 };
 
 struct Data
@@ -592,6 +601,25 @@ public:
     virtual ~Player() = default;
 };
 
+void vote_cmd(Shared_ptr<Data> &data_, const int &num_) {
+    int target = -1;
+    std::osyncstream(std::cout) << "Your choice:\n";
+    std::cout.flush();
+
+    while (true) {
+        std::cin >> target; 
+        
+        if (data_->is_live_[target] && target != num_)
+            break;
+        else 
+            std::osyncstream(std::cout) << "Wrong number, try again\n";
+        std::cout.flush();
+    }
+
+    std::lock_guard<std::mutex> lg{*data_->mut_vote_};
+    data_->vote_list_[num_] = target;
+}
+
 class Civilian : public Player
 {
 public:
@@ -611,22 +639,7 @@ public:
     }
 
     void vote(void) override {
-        int target = -1;
-        std::osyncstream(std::cout) << "Your choice:\n";
-        std::cout.flush();
-
-        while (true) {
-            std::cin >> target; 
-            
-            if (data_->is_live_[target] && target != num_)
-                break;
-            else 
-                std::osyncstream(std::cout) << "Wrong number, try again\n";
-            std::cout.flush();
-        }
-
-        std::lock_guard<std::mutex> lg{*data_->mut_vote_};
-        data_->vote_list_[num_] = target;
+        vote_cmd(data_, num_);
     }
 };
 
@@ -676,29 +689,40 @@ public:
 
     void act(void) override {
         int target = -1;
+        std::osyncstream(std::cout) << "Your choice:\n";
+        std::cout.flush();
 
         while (true) {
-            target = std::experimental::randint(0, int(data_->N_-1));
+            std::cin >> target; 
             
-            if (data_->is_live_[target] && prev_safe_ != target) {
+            if (data_->is_live_[target] && target != prev_safe_) {
                 prev_safe_ = target;
                 break;
             }
+            else 
+                std::osyncstream(std::cout) << "Wrong number, try again\n";
+            std::cout.flush();
         }
-
         doc_to_host_->q_ = target;
 
         doc_to_host_->bar_q_c_->arrive_and_wait();
         doc_to_host_->bar_a_h_->arrive_and_wait();
     }
+
+    void vote(void) override {
+        vote_cmd(data_, num_);
+    }
 };
 
 class Coma : public Player
 {
+public:
     std::queue<int> q_;
     std::set<int> s_;
     Shared_ptr<Coma_to_host> coma_to_host_;
-public:
+
+    Coma () = default;
+
     Coma (const int &num, Shared_ptr<Data> &data, Shared_ptr<Coma_to_host> &coma_to_host) {
         num_ = num;
         data_ = data;
@@ -784,11 +808,81 @@ public:
     }
 };
 
+class Coma_cmd : public Coma
+{
+public:
+    Coma_cmd (const int &num, Shared_ptr<Data> &data, Shared_ptr<Coma_to_host> &coma_to_host) {
+        num_ = num;
+        data_ = data;
+        coma_to_host_ = coma_to_host;
+    }
+
+    void vote(void) override {
+        vote_cmd(data_, num_);
+    }
+
+    void act(void) override {
+        int number = 0;
+        int target = -1;
+        std::osyncstream(std::cout) << "Your choice(kill\\n 0 or check\\n 0):\n";
+        std::cout.flush();
+
+        std::string vr = "";
+
+        do {
+            std::cin >> vr;
+
+            if (vr != "kill" and vr != "check") {
+                std::osyncstream(std::cout) << "Wrong input, try again\n";
+                std::cout.flush();
+            }
+        } while (vr != "kill" and vr != "check");
+
+        number = vr == "check";
+
+        while (true) {
+            std::cin >> target; 
+            
+            if (data_->is_live_[target] && target != num_)
+                break;
+            else 
+                std::osyncstream(std::cout) << "Wrong number, try again\n";
+            std::cout.flush();
+        }
+
+        if (!number % 2) { //rn = 0, kill;  rn = 1 question
+            coma_to_host_->type_q_ = 0;
+            
+            coma_to_host_->q_ = target;
+
+            coma_to_host_->bar_q_c_->arrive_and_wait();
+            coma_to_host_->bar_a_h_->arrive_and_wait();
+        } else {
+            coma_to_host_->type_q_ = 1;
+
+            coma_to_host_->q_ = target;
+
+            coma_to_host_->bar_q_c_->arrive_and_wait();
+            coma_to_host_->bar_a_h_->arrive_and_wait();
+
+            if (coma_to_host_->ans_) {
+                std::osyncstream(std::cout) << target << " is Mafia\n";
+            } else {
+                std::osyncstream(std::cout) << target << " is Civillian\n";
+            }
+
+            std::cout.flush();
+        }
+    }
+};
+
 class Mana : public Player
 {
+public:
     Shared_ptr<Mana_to_host> mana_to_host_;
 
-public:
+    Mana () = default;
+
     Mana (const int &num, Shared_ptr<Data> &data, Shared_ptr<Mana_to_host> &mana_to_host) {
         num_ = num;
         data_ = data;
@@ -812,12 +906,49 @@ public:
     } 
 };
 
+class Mana_cmd : public Mana 
+{
+public:
+    Mana_cmd (const int &num, Shared_ptr<Data> &data, Shared_ptr<Mana_to_host> &mana_to_host) {
+        num_ = num;
+        data_ = data;
+        mana_to_host_ = mana_to_host;
+    }
+
+    void vote(void) override {
+        vote_cmd(data_, num_);
+    }
+
+    void act(void) override {
+        int target = -1;
+        std::osyncstream(std::cout) << "Your choice:\n";
+        std::cout.flush();
+
+        while (true) {
+            std::cin >> target; 
+            
+            if (data_->is_live_[target] && target != num_)
+                break;
+            else 
+                std::osyncstream(std::cout) << "Wrong number, try again\n";
+            std::cout.flush();
+        }
+
+        mana_to_host_->q_ = target;
+
+        mana_to_host_->bar_q_c_->arrive_and_wait();
+        mana_to_host_->bar_a_h_->arrive_and_wait();
+    } 
+};
+
 class Mafia : public Player 
 {
+public:
     Shared_ptr<Mafia_privat> maf_priv_;
     std::set<int> maf_bro_;
 
-public:
+    Mafia () = default;
+
     Mafia (const int &num, Shared_ptr<Data> &data, Shared_ptr<Mafia_privat> & maf_priv, std::set<int> &maf_bro) {
         num_ = num;
         data_ = data;
@@ -850,6 +981,54 @@ public:
     void act_after_die(void) override {
         maf_priv_->bar_maf_vote_->arrive_and_wait();
         maf_priv_->mafia_choice();
+        maf_priv_->bar_maf_host_->arrive_and_wait();
+    }
+};
+
+class Mafia_cmd : public Mafia 
+{
+public:
+    Mafia_cmd (const int &num, Shared_ptr<Data> &data, Shared_ptr<Mafia_privat> & maf_priv, std::set<int> &maf_bro) {
+        num_ = num;
+        data_ = data;
+        maf_priv_ = maf_priv;
+        maf_bro_.merge(maf_bro);
+    }
+
+    void vote(void) override {
+        vote_cmd(data_, num_);
+    }
+
+    void act(void) override {
+        int target = -1;
+
+        maf_priv_->bar_maf_vote_->arrive_and_wait();
+
+        std::unique_lock<std::mutex> ul{*maf_priv_->mut_tar_};
+        std::osyncstream(std::cout) << "Maf bro choice:\n";
+
+        for (auto i : maf_priv_->s_target_) {
+            std::osyncstream(std::cout) << i << ": " << maf_priv_->target_.count(i) << "Maf bro\n";
+        }
+        std::osyncstream(std::cout) << "Your choice:\n";
+        std::cout.flush();
+
+        while (true) {
+            std::cin >> target; 
+            
+            if (data_->is_live_[target] && !maf_bro_.count(target))
+                break;
+            else 
+                std::osyncstream(std::cout) << "Wrong number, try again\n";
+            std::cout.flush();
+        }
+        maf_priv_->s_target_.insert(target);
+        maf_priv_->target_.insert(target);
+        maf_priv_->tar_ = -1;
+        ul.unlock();
+
+        maf_priv_->mafia_choice();
+        
         maf_priv_->bar_maf_host_->arrive_and_wait();
     }
 };
