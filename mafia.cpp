@@ -40,18 +40,10 @@ main(int argc, char **argv)
     for (int i = 3 + mafia_count; i < N; ++i)
         pers[i] = CIVILIAN;
 
-    for (auto x : pers)
-        std::cout << x << " ";
-    std::cout << "\n";
-
     std::random_device rd;
     std::mt19937 g(rd());
  
     std::shuffle(pers.begin(), pers.end(), g);
-
-    for (auto x : pers)
-        std::cout << x << " ";
-    std::cout << "\n";
 
     Shared_ptr<Data> data = new Data(N, mafia_count);
     Shared_ptr<Coma_to_host> coma_to_host = new Coma_to_host();
@@ -78,8 +70,9 @@ main(int argc, char **argv)
     std::set<int> maf_bro;
 
     for (int i = 0; i < N; ++i) 
-        if (pers[i] == MAFIA)
+        if (pers[i] == MAFIA) {
             maf_bro.insert(i);
+        }
 
     if (gamer) {
         int random_number = std::experimental::randint(0, int(N-1));

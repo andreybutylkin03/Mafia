@@ -250,7 +250,7 @@ public:
         std::vector<std::pair<int, int>> ms(host_data_->N_, {0, 0});
         for (int i = 0; i < host_data_->N_; ++i) 
             if (host_data_->vote_list_[i] != -1)
-                ms[host_data_->vote_list_[i]] = {ms[i].first + 1, host_data_->vote_list_[i]};
+                ms[host_data_->vote_list_[i]] = {ms[host_data_->vote_list_[i]].first + 1, host_data_->vote_list_[i]};
 
         sort(ms.rbegin(), ms.rend());
         
@@ -953,7 +953,7 @@ public:
         num_ = num;
         data_ = data;
         maf_priv_ = maf_priv;
-        maf_bro_.merge(maf_bro);
+        maf_bro_.insert(maf_bro.begin(), maf_bro.end());
     }
 
     void act(void) override {
@@ -992,7 +992,7 @@ public:
         num_ = num;
         data_ = data;
         maf_priv_ = maf_priv;
-        maf_bro_.merge(maf_bro);
+        maf_bro_.insert(maf_bro.begin(), maf_bro.end());
     }
 
     void vote(void) override {
