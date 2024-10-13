@@ -1,4 +1,4 @@
-#include "game.hpp"
+#include "players.hpp"
 #include <algorithm>
 #include <iostream>
 #include <iterator>
@@ -85,6 +85,58 @@ main(int argc, char **argv)
         int random_number = std::experimental::randint(0, int(N-1));
 
         std::cout << "Your number is "<< random_number << "\n";
+        std::cout << "You are " << num_to_role[pers[random_number]] << "\n";
+
+        if (num_to_role[pers[random_number]] == "MAFIA") {
+            std::cout << "Your maf bro: \n";
+
+            for (auto i : maf_bro) 
+                if (i != random_number)
+                    std::cout << i << " ";
+
+            std::cout << "\n";
+            std::cout.flush();
+        }
+
+        for (int i = 0; i < N; ++i) {
+            if (i == random_number) {
+                switch (pers[i]) {
+                    case CIVILIAN:
+                        players_struct.push_back(static_cast<Player*>(new Civilian_cmd(i, data)));
+                        break;
+                    case DOC:
+                        players_struct.push_back(static_cast<Player*>(new Doc_cmd(i, data, doc_to_host)));
+                        break;
+                    case COMA:
+                        players_struct.push_back(static_cast<Player*>(new Coma_cmd(i, data, coma_to_host)));
+                        break;
+                    case MANA:
+                        players_struct.push_back(static_cast<Player*>(new Mana_cmd(i, data, mana_to_host)));
+                        break;
+                    case MAFIA:
+                        players_struct.push_back(static_cast<Player*>(new Mafia_cmd(i, data, mafia_privat, maf_bro)));
+                        break;
+                }
+            } else {
+                switch (pers[i]) {
+                    case CIVILIAN:
+                        players_struct.push_back(static_cast<Player*>(new Civilian(i, data)));
+                        break;
+                    case DOC:
+                        players_struct.push_back(static_cast<Player*>(new Doc(i, data, doc_to_host)));
+                        break;
+                    case COMA:
+                        players_struct.push_back(static_cast<Player*>(new Coma(i, data, coma_to_host)));
+                        break;
+                    case MANA:
+                        players_struct.push_back(static_cast<Player*>(new Mana(i, data, mana_to_host)));
+                        break;
+                    case MAFIA:
+                        players_struct.push_back(static_cast<Player*>(new Mafia(i, data, mafia_privat, maf_bro)));
+                        break;
+                }
+            }
+        }
     } else {
         for (int i = 0; i < N; ++i) {
             switch (pers[i]) {
