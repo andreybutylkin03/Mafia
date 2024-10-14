@@ -19,6 +19,9 @@ enum Roles
     COMA,
     MANA,
     MAFIA,
+    KILLER,
+    NINJA,
+    BULL
 };
 
 std::map<int, std::string> num_to_role = {
@@ -26,7 +29,10 @@ std::map<int, std::string> num_to_role = {
     {1, "DOC"},
     {2, "COMA"},
     {3, "MANA"},
-    {4, "MAFIA"}
+    {4, "MAFIA"},
+    {5, "KILLER"},
+    {6, "NINJA"}, 
+    {7, "BULL"}
 };
 
 struct Data
@@ -98,6 +104,18 @@ struct Doc_to_host
     }
 };
 
+struct Killer_to_host
+{
+    std::barrier<> *bar_q_c_;
+    std::barrier<> *bar_a_h_;
+    int q_;
+
+    Killer_to_host () {
+        bar_q_c_ = new std::barrier<>(2);
+        bar_a_h_ = new std::barrier<>(2);
+    }
+};
+
 struct Mafia_privat
 {
     int mafia_count_;
@@ -137,15 +155,17 @@ class Host
     Shared_ptr<Coma_to_host> host_coma_to_host_;
     Shared_ptr<Mana_to_host> host_mana_to_host_;
     Shared_ptr<Doc_to_host> host_doc_to_host_;
+    Shared_ptr<Killer_to_host> host_killer_to_host_;
     Shared_ptr<Mafia_privat> host_mafia_privat_;
     std::vector<int> role_for_num_;
-    std::shared_future<int> f_doc_;
-    std::shared_future<int> f_mana_;
     bool op_cl_info_;
     std::set<int> num_civ_;
     int num_doc_{-1};
     int num_coma_{-1};
     int num_mana_{-1};
+    int num_killer_{-1};
+    int num_ninja_{-1};
+    int num_bull_{-1};
     std::set<int> num_mafia_;
     std::set<int> now_live_;
 
@@ -154,20 +174,18 @@ public:
         Shared_ptr<Coma_to_host> &host_coma_to_host, 
         Shared_ptr<Mana_to_host> &host_mana_to_host, 
         Shared_ptr<Doc_to_host> &host_doc_to_host, 
+        Shared_ptr<Killer_to_host> &host_killer_to_host,
         Shared_ptr<Mafia_privat> &host_mafia_privat, 
         std::vector<int> &role_for_num, 
-        std::shared_future<int> &f_doc, 
-        std::shared_future<int> &f_mana, 
         bool op_cl_info)
         :
         host_data_(host_data), 
         host_coma_to_host_(host_coma_to_host), 
         host_mana_to_host_(host_mana_to_host), 
         host_doc_to_host_(host_doc_to_host), 
+        host_killer_to_host_(host_killer_to_host),
         host_mafia_privat_(host_mafia_privat),
         role_for_num_(role_for_num),
-        f_doc_(f_doc),
-        f_mana_(f_mana),
         op_cl_info_(op_cl_info)
     {
         for (int i = 0; i < host_data_->N_; ++i)
@@ -241,6 +259,15 @@ public:
                 case MAFIA:
                     std::osyncstream(std::cout) << i << " Mafia\n";
                     break;
+                case KILLER:
+                    std::osyncstream(std::cout) << i << " Killer\n";
+                    break;
+                case NINJA:
+                    std::osyncstream(std::cout) << i << " Ninja\n";
+                    break;                
+                case BULL:
+                    std::osyncstream(std::cout) << i << " Bulla\n";
+                    break;
             }
         }
         std::cout.flush();
@@ -310,6 +337,18 @@ public:
                 case MAFIA:
                     num_mafia_.insert(i);
                     break;
+                case KILLER:
+                    num_killer_ = i;
+                    num_mafia_.insert(i);
+                    break;
+                case NINJA:
+                    num_ninja_ = i;
+                    num_mafia_.insert(i);
+                    break;                
+                case BULL:
+                    num_bull_ = i;
+                    num_mafia_.insert(i);
+                    break;
             }
         }
 
@@ -320,6 +359,7 @@ public:
             int target_coma = -1;
             int target_mana = -1;
             int target_mafia = -1;
+            int target_killer = -1;
             std::osyncstream(std::cout) << "Day " << day << "\n\n";
             ++day;
             std::osyncstream(std::cout) << "Night" << "\n";
@@ -334,6 +374,9 @@ public:
                 host_mana_to_host_->bar_q_c_->arrive_and_wait();
                 target_mana = host_mana_to_host_->q_; 
                 host_mana_to_host_->bar_a_h_->arrive_and_wait();
+
+                if (target_mana == num_bull_)
+                    target_mana = -1;
             }
 
             if (host_data_->is_live_[num_coma_]) {
@@ -343,10 +386,20 @@ public:
                     target_coma = host_coma_to_host_->q_;
                 } else {
                     host_coma_to_host_->ans_ = 
-                        role_for_num_[host_coma_to_host_->q_] == MAFIA ? 1 : 0;
+                        (role_for_num_[host_coma_to_host_->q_] == MAFIA ||
+                         role_for_num_[host_coma_to_host_->q_] == KILLER ||
+                         role_for_num_[host_coma_to_host_->q_] == BULL) ? 1 : 0;
+
                 }
 
                 host_coma_to_host_->bar_a_h_->arrive_and_wait();
+            }
+
+            //killer
+            if (host_data_->is_live_[num_killer_]) {
+                host_killer_to_host_->bar_q_c_->arrive_and_wait();
+                target_killer = host_killer_to_host_->q_; 
+                host_killer_to_host_->bar_a_h_->arrive_and_wait();
             }
 
             //mafia
@@ -375,6 +428,11 @@ public:
                 now_live_.erase(target_mafia);
             }
 
+            if (target_killer != -1) {
+                host_data_->is_live_[target_killer] = 0;
+                now_live_.erase(target_killer);
+            }
+
             if (target_coma != -1) {
                 host_data_->is_live_[target_coma] = 0;
                 now_live_.erase(target_coma);
@@ -401,6 +459,10 @@ public:
                     std::osyncstream(std::cout) << "Mafia kill " << target_mafia << "\n";
                 }
 
+                if (target_killer != -1) {
+                    std::osyncstream(std::cout) << "Killer kill " << target_killer << "\n";
+                }
+
                 if (target_coma != -1) {
                     std::osyncstream(std::cout) << "Coma kill " << target_coma << "\n";
                 }
@@ -412,7 +474,8 @@ public:
                 std::set<int> kill_today{
                     target_mana, 
                     target_mafia,
-                    target_coma
+                    target_coma,
+                    target_killer
                 };
 
                 kill_today.erase(target_doc);
@@ -985,6 +1048,84 @@ public:
     }
 };
 
+class Killer : public Mafia 
+{
+public:
+    Shared_ptr<Killer_to_host> killer_to_host_;
+
+    Killer () = default;
+
+    Killer (const int &num, Shared_ptr<Data> &data, Shared_ptr<Mafia_privat> & maf_priv, std::set<int> &maf_bro,
+            Shared_ptr<Killer_to_host> &killer_to_host) {
+        num_ = num;
+        data_ = data;
+        maf_priv_ = maf_priv;
+        maf_bro_.insert(maf_bro.begin(), maf_bro.end());
+        killer_to_host_ = killer_to_host;
+    }
+
+    void act(void) override {
+        int target = -1;
+
+        while (true) {
+            target = std::experimental::randint(0, int(data_->N_-1));
+
+            if (data_->is_live_[target] && !maf_bro_.count(target))
+                break;
+        }
+
+        auto vr = maf_priv_->bar_maf_vote_->arrive();
+        vr = maf_priv_->bar_maf_host_->arrive();
+
+        killer_to_host_->q_ = target;
+
+        killer_to_host_->bar_q_c_->arrive_and_wait();
+        killer_to_host_->bar_a_h_->arrive_and_wait();
+    }
+};
+
+class Killer_cmd : public Killer 
+{
+public:
+    Killer_cmd (const int &num, Shared_ptr<Data> &data, Shared_ptr<Mafia_privat> & maf_priv, std::set<int> &maf_bro,
+            Shared_ptr<Killer_to_host> &killer_to_host) {
+        num_ = num;
+        data_ = data;
+        maf_priv_ = maf_priv;
+        maf_bro_.insert(maf_bro.begin(), maf_bro.end());
+        killer_to_host_ = killer_to_host;
+    }
+
+    void vote(void) override {
+        vote_cmd(data_, num_);
+    }
+
+    void act(void) override {
+        int target = -1;
+
+        std::osyncstream(std::cout) << "Your choice:\n";
+        std::cout.flush();
+
+        while (true) {
+            std::cin >> target; 
+            
+            if (data_->is_live_[target] && !maf_bro_.count(target))
+                break;
+            else 
+                std::osyncstream(std::cout) << "Wrong number, try again\n";
+            std::cout.flush();
+        }
+
+        auto vr = maf_priv_->bar_maf_vote_->arrive();
+        vr = maf_priv_->bar_maf_host_->arrive();
+
+        killer_to_host_->q_ = target;
+
+        killer_to_host_->bar_q_c_->arrive_and_wait();
+        killer_to_host_->bar_a_h_->arrive_and_wait();
+    }
+};
+
 class Mafia_cmd : public Mafia 
 {
 public:
@@ -1008,7 +1149,7 @@ public:
         std::osyncstream(std::cout) << "Maf bro choice:\n";
 
         for (auto i : maf_priv_->s_target_) {
-            std::osyncstream(std::cout) << i << ": " << maf_priv_->target_.count(i) << "Maf bro\n";
+            std::osyncstream(std::cout) << i << ": " << maf_priv_->target_.count(i) << " Maf bro\n";
         }
         std::osyncstream(std::cout) << "Your choice:\n";
         std::cout.flush();

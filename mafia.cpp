@@ -14,10 +14,10 @@ main(int argc, char **argv)
     bool gamer, op_cl_info;
     char c_gamer, c_op_cl_info;
 
-    printf("Enter the number of players -- N:\n");
+    printf("Enter the number of players -- N (N >= 6):\n");
     scanf("%d", &N);
     printf("Enter number -- k, which will determine the number of mafias according" 
-            "to the formula N/k (k >= 3):\n");
+            "to the formula N/k (k >= 2):\n");
     scanf("%d", &k);
     printf("Will you play?(y/n):\n");
     scanf(" %c", &c_gamer);
@@ -34,8 +34,8 @@ main(int argc, char **argv)
         abort();
 
     std::vector<int> pers(N, 0);
-    pers[0] = DOC; pers[1] = COMA; pers[2] = MANA;
-    for (int i = 3; i < 3 + mafia_count; ++i) 
+    pers[0] = DOC; pers[1] = COMA; pers[2] = MANA; pers[3] = KILLER; pers[4] = NINJA; pers[5] = BULL;
+    for (int i = 6; i < 3 + mafia_count; ++i) 
         pers[i] = MAFIA;
     for (int i = 3 + mafia_count; i < N; ++i)
         pers[i] = CIVILIAN;
@@ -49,10 +49,8 @@ main(int argc, char **argv)
     Shared_ptr<Coma_to_host> coma_to_host = new Coma_to_host();
     Shared_ptr<Mana_to_host> mana_to_host = new Mana_to_host();
     Shared_ptr<Doc_to_host> doc_to_host = new Doc_to_host();
+    Shared_ptr<Killer_to_host> killer_to_host = new Killer_to_host();
     Shared_ptr<Mafia_privat> mafia_privat = new Mafia_privat(mafia_count);
-
-    std::promise<int> p_doc, p_mana;
-    std::shared_future<int> f_doc = p_doc.get_future(), f_mana = p_mana.get_future();
 
     std::vector<Player*> players_struct;
     Host host = Host(
@@ -60,19 +58,20 @@ main(int argc, char **argv)
         coma_to_host, 
         mana_to_host, 
         doc_to_host,
+        killer_to_host,
         mafia_privat, 
         pers,
-        f_doc,
-        f_mana,
         op_cl_info
     );
 
     std::set<int> maf_bro;
 
     for (int i = 0; i < N; ++i) 
-        if (pers[i] == MAFIA) {
+        if (pers[i] == MAFIA || pers[i] == KILLER || pers[i] == NINJA || pers[i] == BULL) {
             maf_bro.insert(i);
         }
+
+    std::set<int> maf_num = {MAFIA, KILLER, NINJA, BULL};
 
     if (gamer) {
         int random_number = std::experimental::randint(0, int(N-1));
@@ -80,7 +79,7 @@ main(int argc, char **argv)
         std::cout << "Your number is "<< random_number << "\n";
         std::cout << "You are " << num_to_role[pers[random_number]] << "\n";
 
-        if (num_to_role[pers[random_number]] == "MAFIA") {
+        if (maf_num.count(pers[random_number])) {
             std::cout << "Your maf bro: \n";
 
             for (auto i : maf_bro) 
@@ -109,6 +108,16 @@ main(int argc, char **argv)
                     case MAFIA:
                         players_struct.push_back(static_cast<Player*>(new Mafia_cmd(i, data, mafia_privat, maf_bro)));
                         break;
+                    case KILLER:
+                        players_struct.push_back(static_cast<Player*>(new Killer_cmd(i, data, mafia_privat, maf_bro,
+                                                                                     killer_to_host)));
+                        break;
+                    case NINJA:
+                        players_struct.push_back(static_cast<Player*>(new Mafia_cmd(i, data, mafia_privat, maf_bro)));
+                        break;                
+                    case BULL:
+                        players_struct.push_back(static_cast<Player*>(new Mafia_cmd(i, data, mafia_privat, maf_bro)));
+                        break;
                 }
             } else {
                 switch (pers[i]) {
@@ -125,6 +134,16 @@ main(int argc, char **argv)
                         players_struct.push_back(static_cast<Player*>(new Mana(i, data, mana_to_host)));
                         break;
                     case MAFIA:
+                        players_struct.push_back(static_cast<Player*>(new Mafia(i, data, mafia_privat, maf_bro)));
+                        break;
+                    case KILLER:
+                        players_struct.push_back(static_cast<Player*>(new Killer(i, data, mafia_privat, maf_bro,
+                                                                                     killer_to_host)));
+                        break;
+                    case NINJA:
+                        players_struct.push_back(static_cast<Player*>(new Mafia(i, data, mafia_privat, maf_bro)));
+                        break;                
+                    case BULL:
                         players_struct.push_back(static_cast<Player*>(new Mafia(i, data, mafia_privat, maf_bro)));
                         break;
                 }
@@ -146,6 +165,16 @@ main(int argc, char **argv)
                     players_struct.push_back(static_cast<Player*>(new Mana(i, data, mana_to_host)));
                     break;
                 case MAFIA:
+                    players_struct.push_back(static_cast<Player*>(new Mafia(i, data, mafia_privat, maf_bro)));
+                    break;
+                case KILLER:
+                    players_struct.push_back(static_cast<Player*>(new Killer(i, data, mafia_privat, maf_bro,
+                                                                                 killer_to_host)));
+                    break;
+                case NINJA:
+                    players_struct.push_back(static_cast<Player*>(new Mafia(i, data, mafia_privat, maf_bro)));
+                    break;                
+                case BULL:
                     players_struct.push_back(static_cast<Player*>(new Mafia(i, data, mafia_privat, maf_bro)));
                     break;
             }
