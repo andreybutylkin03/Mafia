@@ -3,8 +3,9 @@
 #include <experimental/random>
 #include <mutex>
 #include <barrier>
-#include <memory>
-#include <future>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <queue>
 #include <set>
 #include <syncstream>
@@ -354,6 +355,10 @@ public:
 
         int day = 1;
 
+        std::filesystem::path c_path= {std::filesystem::current_path()/"Log"};
+        std::cout << c_path << " " << std::filesystem::exists(c_path) << "\n";
+
+
         while (true) {
             int target_doc = -1;
             int target_coma = -1;
@@ -394,20 +399,19 @@ public:
 
                 host_coma_to_host_->bar_a_h_->arrive_and_wait();
             }
-
-            //killer
-            if (host_data_->is_live_[num_killer_]) {
-                host_killer_to_host_->bar_q_c_->arrive_and_wait();
-                target_killer = host_killer_to_host_->q_; 
-                host_killer_to_host_->bar_a_h_->arrive_and_wait();
-            }
-
             //mafia
             {
                 host_mafia_privat_->bar_maf_host_->arrive_and_wait();
                 host_mafia_privat_->mafia_choice();
 
                 target_mafia = host_mafia_privat_->tar_;
+            }
+
+            //killer
+            if (host_data_->is_live_[num_killer_]) {
+                host_killer_to_host_->bar_q_c_->arrive_and_wait();
+                target_killer = host_killer_to_host_->q_; 
+                host_killer_to_host_->bar_a_h_->arrive_and_wait();
             }
 
             if (host_data_->is_live_[num_doc_]) {
@@ -1067,15 +1071,18 @@ public:
     void act(void) override {
         int target = -1;
 
+        maf_priv_->bar_maf_vote_->arrive_and_wait();
+        maf_priv_->bar_maf_host_->arrive_and_wait();
+
+        int mafia_choice = maf_priv_->tar_;
+
         while (true) {
             target = std::experimental::randint(0, int(data_->N_-1));
 
-            if (data_->is_live_[target] && !maf_bro_.count(target))
+            if (data_->is_live_[target] && !maf_bro_.count(target) && mafia_choice != target)
                 break;
         }
 
-        auto vr = maf_priv_->bar_maf_vote_->arrive();
-        vr = maf_priv_->bar_maf_host_->arrive();
 
         killer_to_host_->q_ = target;
 
@@ -1103,13 +1110,21 @@ public:
     void act(void) override {
         int target = -1;
 
+        maf_priv_->bar_maf_vote_->arrive_and_wait();
+        maf_priv_->bar_maf_host_->arrive_and_wait();
+
+        int mafia_choice = maf_priv_->tar_;
+
+        std::osyncstream(std::cout) << "Mafia choice: " << mafia_choice << "\n";
+        std::cout.flush();
+
         std::osyncstream(std::cout) << "Your choice:\n";
         std::cout.flush();
 
         while (true) {
             std::cin >> target; 
             
-            if (data_->is_live_[target] && !maf_bro_.count(target))
+            if (data_->is_live_[target] && !maf_bro_.count(target) && mafia_choice != target)
                 break;
             else 
                 std::osyncstream(std::cout) << "Wrong number, try again\n";
