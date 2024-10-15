@@ -11,6 +11,8 @@
 #include <syncstream>
 #include <map>
 #include <sstream>
+#include <ranges>
+#include <algorithm>
 
 #include "shared_ptr.hpp"
 
@@ -190,17 +192,13 @@ public:
         role_for_num_(role_for_num),
         op_cl_info_(op_cl_info)
     {
-        for (int i = 0; i < host_data_->N_; ++i)
-            now_live_.insert(i);
+        std::ranges::copy(std::views::iota(0, host_data_->N_), std::inserter(now_live_, now_live_.end()));
     }
 
     int is_live(const std::set<int> &num) {
-        int count = 0;
-        
-        for (auto i : num) 
-            count += host_data_->is_live_[i];
-
-        return count;
+        return std::ranges::count_if(num, [&](int index) {
+            return index < host_data_->N_ && host_data_->is_live_[index];  
+        });
     }
 
     int state_game(void) { //0 - go, 1 - civ, 2 - maf, 3 - man
@@ -289,6 +287,60 @@ public:
     }
 
     void vote_res(void) {
+        std::vector<int> sorted_numbers = host_data_->vote_list_;
+        std::ranges::sort(sorted_numbers);
+
+        auto groups = std::ranges::views::chunk_by(sorted_numbers, std::equal_to{});
+        std::vector<int> ms;
+        int max_count = 0;
+        for (const auto &group : groups) {
+            if (*group.begin() != -1) {
+                int dist = std::ranges::distance(group);
+                
+                if (dist > max_count) {
+                    ms.clear();
+                    ms.push_back(*group.begin());
+                    max_count = dist;
+                } else if (dist == max_count)
+                    ms.push_back(*group.begin());
+            }
+        }
+
+        if (ms.size() == 1) {
+            host_data_->is_live_[ms[0]] = 0;
+            std::osyncstream(std::cout) << "Kick " << ms[0] << "\n";
+            std::cout.flush();
+            now_live_.erase(ms[0]);
+        } else {
+            int random_number = std::experimental::randint(0, 2);
+
+            if (random_number) {
+                int target = std::experimental::randint(0, int(ms.size()));
+                host_data_->is_live_[ms[target]] = 0;
+                std::osyncstream(std::cout) << "Kick " << ms[target] << "\n";
+                std::cout.flush();
+
+                now_live_.erase(ms[target]);
+            } else {
+                std::osyncstream(std::cout) << "No Kick today\n";
+                std::cout.flush();            
+            }
+        }
+        std::osyncstream(std::cout) <<  "\n";
+        std::cout.flush();
+        /*int most_frequent = sorted_numbers[0];
+        size_t max_count = 0;
+
+        // Проходим по группам и находим самую большую по количеству вхождений
+        for (const auto& group : groups) {
+            size_t group_size = std::ranges::distance(group);
+
+            if (group_size > max_count) {
+                max_count = group_size;
+                most_frequent = *group.begin(); // Первое число в группе — это наше число
+            }
+        }
+
         std::vector<std::pair<int, int>> ms(host_data_->N_, {0, 0});
         for (int i = 0; i < host_data_->N_; ++i) 
             if (host_data_->vote_list_[i] != -1)
@@ -303,27 +355,9 @@ public:
 
         std::unique_lock<std::mutex> uls{*host_data_->mut_state_};
         if (r == 1) {
-            host_data_->is_live_[ms[0].second] = 0;
-            std::osyncstream(std::cout) << "Kick " << ms[0].second << "\n";
-            std::cout.flush();
-            now_live_.erase(ms[0].second);
-        } else {
-            int random_number = std::experimental::randint(0, int(1));
 
-            if (random_number) {
-                int target = std::experimental::randint(0, int(r-1));
-                host_data_->is_live_[ms[target].second] = 0;
-                std::osyncstream(std::cout) << "Kick " << ms[target].second << "\n";
-                std::cout.flush();
-
-                now_live_.erase(ms[target].second);
-            } else {
-                std::osyncstream(std::cout) << "No Kick today\n";
-                std::cout.flush();            
-            }
-        }
-        std::osyncstream(std::cout) <<  "\n";
-        std::cout.flush();
+        } else {*/
+ 
     }
 
     void host_loop(void) {
