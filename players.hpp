@@ -10,6 +10,7 @@
 #include <set>
 #include <syncstream>
 #include <map>
+#include <sstream>
 
 #include "shared_ptr.hpp"
 
@@ -228,18 +229,21 @@ public:
         return 0;
     }
 
-    void print_res(const int &state_res) {
+    void print_res(const int &state_res, std::filesystem::path &c_path) {
+        std::ofstream out(c_path/"res");
+
         switch (state_res) {
-            case 0:
-                break;
             case 1:
                 std::osyncstream(std::cout) << "Civillian win\n";
+                out << "Civillian win\n";
                 break;
             case 2:
                 std::osyncstream(std::cout) << "Mafia win\n";
+                out << "Mafia win\n";
                 break;
             case 3:
                 std::osyncstream(std::cout) << "Mana win\n";
+                out << "Mana win\n";
                 break;
         }
 
@@ -247,31 +251,41 @@ public:
             switch (role_for_num_[i]) {
                 case CIVILIAN:
                     std::osyncstream(std::cout) << i << " Civillian\n";
+                    out << i << " Civillian\n";
                     break;
                 case DOC:
                     std::osyncstream(std::cout) << i << " Doc\n";
+                    out << i << " Doc\n";
                     break;
                 case COMA:
                     std::osyncstream(std::cout) << i << " Coma\n";
+                    out << i << " Coma\n";
                     break;
                 case MANA:
                     std::osyncstream(std::cout) << i << " Mana\n";
+                    out << i << " Mana\n";
                     break;
                 case MAFIA:
                     std::osyncstream(std::cout) << i << " Mafia\n";
+                    out << i << " Mafia\n";
                     break;
                 case KILLER:
                     std::osyncstream(std::cout) << i << " Killer\n";
+                    out << i << " Killer\n";
                     break;
                 case NINJA:
                     std::osyncstream(std::cout) << i << " Ninja\n";
+                    out << i << " Ninja\n";
                     break;                
                 case BULL:
-                    std::osyncstream(std::cout) << i << " Bulla\n";
+                    std::osyncstream(std::cout) << i << " Bull\n";
+                    out << i << " Bull\n";
                     break;
             }
         }
         std::cout.flush();
+
+        out.close();
     }
 
     void vote_res(void) {
@@ -356,10 +370,16 @@ public:
         int day = 1;
 
         std::filesystem::path c_path= {std::filesystem::current_path()/"Log"};
-        std::cout << c_path << " " << std::filesystem::exists(c_path) << "\n";
+        if (std::filesystem::exists(c_path)) {
+            std::filesystem::remove_all(c_path);
+        }
 
+        std::filesystem::create_directories(c_path);
 
         while (true) {
+            std::stringstream ss;
+            ss << "day_" << day;
+            std::ofstream out(c_path/ss.str());
             int target_doc = -1;
             int target_coma = -1;
             int target_mana = -1;
@@ -399,6 +419,7 @@ public:
 
                 host_coma_to_host_->bar_a_h_->arrive_and_wait();
             }
+
             //mafia
             {
                 host_mafia_privat_->bar_maf_host_->arrive_and_wait();
@@ -453,26 +474,32 @@ public:
 
             std::osyncstream(std::cout) << "Night result" << "\n";
             std::cout.flush();
+            out << "Night result" << "\n";
 
             if (op_cl_info_) {
                 if (target_mana != -1) {
                     std::osyncstream(std::cout) << "Mana kill " << target_mana << "\n";
+                    out << "Mana kill " << target_mana << "\n";
                 }
 
                 if (target_mafia != -1) {
                     std::osyncstream(std::cout) << "Mafia kill " << target_mafia << "\n";
+                    out << "Mafia kill " << target_mafia << "\n";
                 }
 
                 if (target_killer != -1) {
                     std::osyncstream(std::cout) << "Killer kill " << target_killer << "\n";
+                    out << "Killer kill " << target_killer << "\n";
                 }
 
                 if (target_coma != -1) {
                     std::osyncstream(std::cout) << "Coma kill " << target_coma << "\n";
+                    out << "Coma kill " << target_coma << "\n";
                 }
 
                 if (target_doc != -1) {
                     std::osyncstream(std::cout) << "Doc save " << target_doc << "\n";
+                    out << "Doc save " << target_doc << "\n";
                 }
             } else {
                 std::set<int> kill_today{
@@ -484,14 +511,20 @@ public:
 
                 kill_today.erase(target_doc);
 
-                if (kill_today.empty())
+                if (kill_today.empty()) {
                     std::osyncstream(std::cout) << "No kill today\n";
+                    out << "No kill today\n";
+                }
                 else {
                     std::osyncstream(std::cout) << "Today kill\n";
+                    out << "Today kill\n";
 
                     for (auto i : kill_today)
-                        if (i != -1)
+                        if (i != -1) {
                             std::osyncstream(std::cout) << i << " ";
+                            out << i << " ";
+                        }
+                    out << "\n";
                     std::osyncstream(std::cout) << "\n";
                 }
             }
@@ -499,8 +532,9 @@ public:
             int state_res = state_game(); //0 - go, 1 - civ, 2 - maf, 3 - man
 
             if (state_res) {
+                out.close();
                 std::osyncstream(std::cout) << "\n";
-                print_res(state_res);
+                print_res(state_res, c_path);
                 ul.lock();
                 host_data_->theme_ = 2;
                 ul.unlock();
@@ -508,11 +542,16 @@ public:
             }
 
             std::osyncstream(std::cout) << "Now live\n";
-            for (auto i : now_live_) 
+            out << "Now live\n";
+            for (auto i : now_live_) {
                 std::osyncstream(std::cout) << i << " ";
+                out << i << " ";
+            }
             std::osyncstream(std::cout) << "\n\n";
+            out << "\n\n";
 
             std::osyncstream(std::cout) << "Day vote\n";
+            out << "Day vote\n";
 
             std::cout.flush();
 
@@ -523,21 +562,30 @@ public:
             host_data_->bar_vote_->arrive_and_wait();
 
             std::osyncstream(std::cout) << "Vote result\n";
+            out << "Vote result\n";
 
-            for (auto i : now_live_) 
+            for (auto i : now_live_) {
                 std::osyncstream(std::cout) << i << " ";
+                out << i << " ";
+            }
             std::osyncstream(std::cout) << "\n";
 
-            for (auto i : now_live_) 
+            for (auto i : now_live_) {
                 std::osyncstream(std::cout) << host_data_->vote_list_[i] << " ";
+                out << host_data_->vote_list_[i] << " ";
+            }
             std::osyncstream(std::cout) << "\n";
+            out << "\n";
 
             vote_res();
 
             std::osyncstream(std::cout) << "Now live\n";
-            for (auto i : now_live_) 
+            for (auto i : now_live_) {
                 std::osyncstream(std::cout) << i << " ";
+                out << i << " ";
+            }
             std::osyncstream(std::cout) << "\n\n";
+            out << "\n\n";
 
             std::cout.flush();
 
@@ -546,7 +594,8 @@ public:
             state_res = state_game(); //0 - go, 1 - civ, 2 - maf, 3 - man
 
             if (state_res) {
-                print_res(state_res);
+                out.close();
+                print_res(state_res, c_path);
                 ul.lock();
                 host_data_->theme_ = 2;
                 ul.unlock();
@@ -561,6 +610,8 @@ public:
             host_mafia_privat_->target_.clear();
             host_mafia_privat_->s_target_.clear();
             host_mafia_privat_->tar_ = -1;
+
+            out.close();
         }
     }
 
