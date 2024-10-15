@@ -183,10 +183,10 @@ main(int argc, char **argv)
 
     std::vector<std::thread> t;
 
-    std::thread th{&Host::host_loop, host};
+    std::thread th = start_host(&host); //{&Host::host_loop, host};
 
     for (int i = 0; i < N; ++i) 
-        t.push_back(std::thread {&Player::game_loop, players_struct[i]});
+        t.push_back(start_player(players_struct[i])); //std::thread {&Player::game_loop, players_struct[i]});
 
     th.join();
 

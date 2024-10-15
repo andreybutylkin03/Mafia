@@ -39,6 +39,30 @@ std::map<int, std::string> num_to_role = {
     {7, "BULL"}
 };
 
+template <typename T>
+concept PlayerConcept = requires(T* v)
+{
+    {v->vote()} -> std::convertible_to<void>;
+    {v->act()} -> std::convertible_to<void>;
+    {v->game_loop()} -> std::convertible_to<void>;
+};
+
+template <typename T>
+concept HostConcept = requires(T* v)
+{
+    {v->host_loop()} -> std::convertible_to<void>;
+};
+
+template <PlayerConcept T>
+std::thread start_player(T* player) {
+    return std::thread([player]() {player->game_loop();});
+}
+
+template <HostConcept T>
+std::thread start_host(T* host) {
+    return std::thread([host]() {host->host_loop();});
+}
+
 struct Data
 {
     int N_;
